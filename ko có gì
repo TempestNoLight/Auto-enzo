@@ -1,0 +1,115 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
+
+local State = {
+    AutoEnzo = false,
+    lastEnzoAttempt = 0,
+    minigameHeartbeat = nil,
+    phase2Heartbeat = nil,
+}
+
+local function findEnzo()
+    local npcs = workspace:FindFirstChild("NPCs") or workspace:FindFirstChild("Entities") or workspace
+    for _, obj in ipairs(npcs:GetChildren()) do
+        if obj:IsA("Model") and obj.Name:lower():find("enzo") then
+            return obj
+        end
+    end
+    return nil
+end
+
+local function startEnzo()
+    if os.clock() - State.lastEnzoAttempt < 5 then return false end
+    State.lastEnzoAttempt = os.clock()
+    local enzo = findEnzo()
+    if not enzo then return false end
+    local prompt = enzo:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt then
+        pcall(function()
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration or 0.1)
+            prompt:InputHoldEnd()
+        end)
+        return true
+    end
+    return false
+end
+
+local function doSlam()
+    local gui = lp.PlayerGui:FindFirstChild("MainGui")
+    if not gui then return end
+    local minigame = gui:FindFirstChild("Minigame") or gui:FindFirstChild("Slam")
+    if not minigame or not minigame.Visible then return end
+    local bar = minigame:FindFirstChild("Bar", true)
+    local target = minigame:FindFirstChild("Target", true)
+    if not bar or not target then return end
+    local barPos = bar.AbsolutePosition.X + bar.AbsoluteSize.X / 2
+    local tgtPos = target.AbsolutePosition.X + target.AbsoluteSize.X / 2
+    if math.abs(barPos - tgtPos) < 40 then
+        local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+        if events and events:FindFirstChild("Slam") then
+            events.Slam:FireServer()
+        end
+    end
+end
+
+local function doCharge()
+    local gui = lp.PlayerGui:FindFirstChild("MainGui")
+    if not gui then return end
+    local charge = gui:FindFirstChild("Charge")
+    if not charge or not charge.Visible then return end
+    local power = charge:FindFirstChild("Power", true)
+    if power and power.AbsoluteSize.X >= power.Parent.AbsoluteSize.X * 0.9 then
+        local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+        if events and events:FindFirstChild("Charge") then
+            events.Charge:FireServer()
+        end
+    end
+end
+
+local function doRhythm()
+    local gui = lp.PlayerGui:FindFirstChild("MainGui")
+    if not gui then return end
+    local rhythm = gui:FindFirstChild("Rhythm")
+    if not rhythm or not rhythm.Visible then return end
+    local hitLine = rhythm:FindFirstChild("HitLine", true)
+    local note = rhythm:FindFirstChild("Note", true)
+    if not hitLine or not note then return end
+    if math.abs(note.AbsolutePosition.X - hitLine.AbsolutePosition.X) < 30 then
+        local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+        if events and events:FindFirstChild("RhythmHit") then
+            events.RhythmHit:FireServer()
+        end
+    end
+end
+
+State.minigameHeartbeat = RunService.Heartbeat:Connect(function()
+    if not State.AutoEnzo then return end
+    pcall(function()
+        doSlam()
+        doCharge()
+        doRhythm()
+    end)
+end)
+
+task.spawn(function()
+    while task.wait(1) do
+        if State.AutoEnzo then
+            pcall(function()
+                local char = lp.Character
+                if not char then return end
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if not hum or hum.Health <= 0 then return end
+                if not State.phase2Heartbeat then
+                    startEnzo()
+                end
+            end)
+        end
+    end
+end)
+
+return {
+    SetAutoEnzo = function(v) State.AutoEnzo = v end,
+    IsAutoEnzo = function() return State.AutoEnzo end,
+}
